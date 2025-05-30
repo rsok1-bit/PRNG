@@ -1,0 +1,44 @@
+module ADC_Seed_Generator ( 
+    input wire clk,           // System clock
+    input wire rst,           // Reset signal
+    output reg [63:0] seed1,  // First 64-bit seed output
+    output reg [63:0] seed2   // Second 64-bit seed output
+);
+
+// Internal registers
+reg [63:0] adc_sample;   // Now a full 64-bit ADC output
+reg [63:0] entropy_pool; // Storage for 4 ADC samples
+reg [1:0] sample_count;  // Counts up to 4
+
+// Step 1: Simulated ADC entropy source (randomized values) 
+always @(posedge clk or posedge rst) begin
+    if (rst) begin
+        adc_sample <= 64'hACE1F23D98765432;  // 64-bit Initial random seed
+    end else begin
+        adc_sample <= adc_sample ^ (adc_sample >> 7) ^ (adc_sample << 13); // Improved randomness model
+    end
+end
+
+// Step 2: Collect ADC samples and apply XOR mixing
+always @(posedge clk or posedge rst) begin
+    if (rst) begin
+        entropy_pool <= 64'b0;
+        sample_count <= 0;
+    end else begin
+        entropy_pool <= (entropy_pool << 16) ^ adc_sample;  
+        sample_count <= sample_count + 1;
+
+        // Once 4 samples are collected (16-bit * 4 = 64-bit), finalize seed
+        if (sample_count == 4) begin
+            sample_count <= 0;
+        end
+    end
+end
+
+// Step 3: Assign final seed outputs
+always @(posedge clk) begin
+    seed1 <= entropy_pool; // Direct output (can be passed to PCG)
+    seed2 <= ~entropy_pool ^ 64'hDEADBEEFCAFEBABE;   // Second seed (inverted and XORed)
+end
+
+endmodule

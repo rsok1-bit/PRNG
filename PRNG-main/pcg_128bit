@@ -1,0 +1,56 @@
+module pcg_128bit(
+    input wire clk,
+    input wire rst_n,
+    input wire [127:0] nlfsr_feedback, // NLFSR output for looping
+    output wire [127:0] random_out
+);
+
+    // Internal signals
+    wire [63:0] ADC_seed1;  //wires for ADC output
+    wire [63:0] ADC_seed2;
+    reg [63:0] seed1 = 64'hACE1F23D98765432; // Initialize to avoid undefined values
+    reg [63:0] seed2 = 64'hDEADBEEFCAFEBABE;
+    wire [63:0] pcg1_out;
+    wire [63:0] pcg2_out;
+
+    // Instantiate ADC Seed Generator (Only used at reset)
+    ADC_Seed_Generator seed_gen(
+        .clk(clk),
+        .rst(~rst_n),
+        .seed1(ADC_seed1),
+        .seed2(ADC_seed2)
+    );
+
+    // Update seeds after reset
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            // Use ADC Seed Generator output initially
+            seed1 <= ADC_seed1;
+            seed2 <= ADC_seed2;
+        end else begin
+            // After reset, use NLFSR output for feedback loop
+            seed1 <= nlfsr_feedback[127:64];
+            seed2 <= nlfsr_feedback[63:0];
+        end
+    end
+
+    // Instantiate PCG1 with dynamic seed1
+    pcg pcg1_inst(
+        .clk(clk),
+        .rst_n(rst_n),
+        .seed(seed1),      // Connect to dynamic seed1
+        .random_out(pcg1_out)
+    );
+
+    // Instantiate PCG2 with dynamic seed2
+    pcg pcg2_inst(
+        .clk(clk),
+        .rst_n(rst_n),
+        .seed(seed2),      // Connect to dynamic seed2
+        .random_out(pcg2_out)
+    );
+
+    // Combine outputs
+    assign random_out = {pcg1_out, pcg2_out};
+
+endmodule
